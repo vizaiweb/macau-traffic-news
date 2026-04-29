@@ -8,92 +8,99 @@
             --bg-color: #050505;
             --dsat-red: #e63946;
             --text-gold: #ffca28;
-            --page-info: rgba(255, 255, 255, 0.35);
+            --page-info: rgba(255, 255, 255, 0.3);
         }
 
+        /* 核心修復：強制禁止全身滾動 */
         body {
             margin: 0; background: var(--bg-color); color: white;
             font-family: "PingFang HK", "Microsoft JhengHei", sans-serif;
-            height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+            height: 100vh; width: 100vw;
+            display: flex; flex-direction: column; 
+            overflow: hidden; 
         }
 
-        /* 標題欄：僅放新聞標題 */
+        /* 標題區：固定高度 */
         .header {
-            background: var(--dsat-red); padding: 2.5vh; font-size: 4.5vh;
-            font-weight: 900; text-align: center; position: relative;
+            height: 12vh; min-height: 80px;
+            background: var(--dsat-red); 
             display: flex; justify-content: center; align-items: center;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            position: relative; z-index: 10;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.8);
         }
 
-        /* 日期：獨立於標題之外，靠左顯示 */
         .publish-date {
-            position: absolute; left: 30px; font-size: 2.8vh;
+            position: absolute; left: 30px; font-size: 2.5vh;
             color: rgba(255, 255, 255, 0.9); font-weight: normal;
-            font-family: Arial, sans-serif;
+        }
+
+        #ui-title {
+            font-size: 4.5vh; font-weight: 900;
+            max-width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
 
         .controls { position: absolute; right: 20px; display: flex; gap: 10px; }
-        .btn { background: rgba(255,255,255,0.2); border: 2px solid #fff; color: #fff; padding: 10px 20px; cursor: pointer; border-radius: 6px; font-size: 1.2rem; }
-        .btn:hover { background: #fff; color: #000; }
+        .btn { background: rgba(255,255,255,0.2); border: 2px solid #fff; color: #fff; padding: 8px 15px; cursor: pointer; border-radius: 6px; font-size: 1rem; }
 
-        /* 主顯示區：內文分頁 */
+        /* 內文區：自動伸縮，絕不超出 */
         .main-display { 
-            flex: 1; display: flex; justify-content: center; align-items: center; 
-            padding: 0 8vw; position: relative; 
+            flex: 1; /* 佔據剩餘所有空間 */
+            display: flex; justify-content: center; align-items: center; 
+            padding: 0 6vw; position: relative;
+            overflow: hidden; /* 確保內容不會溢出蓋到走字 */
         }
 
-        /* 內文字體放大 20% (6.5vh) */
+        /* 內文字體放大 20% (約 6.5vh) */
         #ui-content { 
-            font-size: 6.5vh; line-height: 1.7; color: #fff; text-align: justify; 
-            width: 100%; transition: opacity 0.4s; font-weight: 500;
+            font-size: 6.5vh; line-height: 1.5; color: #fff; text-align: justify; 
+            width: 100%; transition: opacity 0.3s; font-weight: 500;
+            word-wrap: break-word;
         }
 
-        /* 右下角淺色分頁標示 */
         .page-counter {
-            position: absolute; bottom: 4vh; right: 4vw;
-            font-size: 3.5vh; color: var(--page-info);
+            position: absolute; bottom: 2vh; right: 3vw;
+            font-size: 3vh; color: var(--page-info);
         }
 
-        /* 底部走字：新聞標題滾動 */
+        /* 底部走字區：固定高度 */
         .marquee-wrapper {
-            background: #111; height: 13vh; border-top: 5px solid var(--text-gold);
+            height: 12vh; min-height: 70px;
+            background: #111; border-top: 5px solid var(--text-gold);
             display: flex; align-items: center; overflow: hidden; position: relative;
+            z-index: 10;
         }
         #marquee-text { 
-            white-space: nowrap; font-size: 6.5vh; font-weight: bold; 
+            white-space: nowrap; font-size: 6vh; font-weight: bold; 
             color: var(--text-gold); position: absolute; 
         }
 
-        #overlay {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.98);
-            z-index: 1000; display: flex; justify-content: center; align-items: center;
-        }
+        #overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.98); z-index: 1000; display: flex; justify-content: center; align-items: center; }
     </style>
 </head>
 <body>
 
     <div id="overlay">
-        <button class="btn" style="font-size: 2.5rem; padding: 30px 70px;" onclick="initSystem()">啟動廣播監控系統</button>
+        <button class="btn" style="font-size: 2.5rem; padding: 30px 70px;" onclick="initSystem()">啟動系統</button>
     </div>
 
-    <div class="header">
+    <header class="header">
         <div id="ui-date" class="publish-date">--/--/----</div>
-        <span id="ui-title">同步中...</span>
+        <div id="ui-title">同步中...</div>
         <div class="controls">
-            <button class="btn" onclick="resumeApp()">▶ 播放</button>
-            <button class="btn" onclick="pauseApp()">⏸ 暫停</button>
-            <button class="btn" onclick="stopApp()">⏹ 停止</button>
+            <button class="btn" onclick="resumeApp()">播放</button>
+            <button class="btn" onclick="pauseApp()">暫停</button>
+            <button class="btn" onclick="stopApp()">停止</button>
         </div>
-    </div>
+    </header>
 
-    <div class="main-display">
+    <main class="main-display">
         <div id="ui-content">正在獲取資料...</div>
         <div id="ui-page" class="page-counter"></div>
-    </div>
+    </main>
 
-    <div class="marquee-wrapper">
+    <footer class="marquee-wrapper">
         <div id="marquee-text">正在載入最新交通資訊...</div>
-    </div>
+    </footer>
 
     <script>
         let isStopped = true;
@@ -102,14 +109,16 @@
         let marqueePos = window.innerWidth;
         const synth = window.speechSynthesis;
 
-        // 智慧分頁：嚴格在標點處切斷
-        function smartSplit(text, maxLength = 80) {
+        // 智慧分頁：這是在放大字體後防止溢出的關鍵
+        function smartSplit(text, maxLength = 65) {
             const result = [];
             let currentStr = "";
+            // 以標點符號切分
             const chunks = text.split(/([。；！？])/).filter(Boolean);
 
             for (let i = 0; i < chunks.length; i++) {
                 let s = chunks[i];
+                // 如果加上這一句會超過長度限制，就另起一頁
                 if ((currentStr + s).length > maxLength && currentStr !== "") {
                     result.push(currentStr);
                     currentStr = "";
@@ -125,19 +134,16 @@
                 const res = await fetch('data.json?t=' + Date.now());
                 const data = await res.json();
                 
-                // 1. 設置標題、日期
                 document.getElementById('ui-title').innerText = data.title;
                 document.getElementById('ui-date').innerText = data.date;
+                document.getElementById('marquee-text').innerText = "【最新交通消息】" + data.title;
                 
-                // 2. 設置走字內容 (放新聞標題)
-                document.getElementById('marquee-text').innerText = "【最新消息】" + data.title;
-                
-                // 3. 處理內文分頁
+                // 執行分頁
                 pages = smartSplit(data.fullText);
                 
                 if (!isStopped) startBroadcast();
             } catch (e) {
-                console.error("Data.json 尚未準備好");
+                console.error("等待數據中...");
             }
         }
 
@@ -146,7 +152,7 @@
             isStopped = false;
             updateNewsData();
             startMarquee();
-            setInterval(updateNewsData, 600000); // 10分鐘檢查一次更新
+            setInterval(updateNewsData, 600000);
         }
 
         async function startBroadcast() {
@@ -159,14 +165,14 @@
                 if (isStopped || iterId !== currentIter) break;
                 
                 contentEl.style.opacity = "0";
-                await new Promise(r => setTimeout(r, 400));
+                await new Promise(r => setTimeout(r, 300));
                 
                 pageEl.innerText = `${i + 1} / ${pages.length}`;
                 contentEl.innerText = pages[i];
                 contentEl.style.opacity = "1";
                 
                 await speak(pages[i]);
-                if (!isStopped) await new Promise(r => setTimeout(r, 1200));
+                if (!isStopped) await new Promise(r => setTimeout(r, 1000));
             }
             if (!isStopped && iterId === currentIter) startBroadcast();
         }
@@ -204,7 +210,7 @@
             const marquee = document.getElementById('marquee-text');
             function animate() {
                 if (!isStopped && !synth.paused) {
-                    marqueePos -= 2.5; 
+                    marqueePos -= 2.2; 
                     if (marqueePos < -marquee.offsetWidth) marqueePos = window.innerWidth;
                     marquee.style.transform = `translateX(${marqueePos}px)`;
                 }

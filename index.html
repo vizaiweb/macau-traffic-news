@@ -1,59 +1,217 @@
-import requests
-from bs4 import BeautifulSoup
-import json
-import re
-
-def auto_scrape_dsat():
-    # 這是你提供的新聞連結
-    target_url = "https://www.dsat.gov.mo/dsat/news_detail.aspx?a_id=6411412D3DE9A671E1D150550511DAD9"
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    }
-
-    try:
-        res = requests.get(target_url, headers=headers, timeout=15)
-        res.encoding = 'utf-8'
-        soup = BeautifulSoup(res.text, 'html.parser')
-
-        # 擷取標題
-        title_tag = soup.select_one(".news_title") or soup.find('h1')
-        title = title_tag.get_text(strip=True) if title_tag else "DSAT 交通新聞"
-
-        # 擷取日期 (從文字內容中尋找日期格式)
-        publish_date = "28-04-2026"
-        date_area = soup.select_one(".news_info") or soup
-        date_match = re.search(r'\d{2}-\d{2}-\d{4}', date_area.get_text())
-        if date_match:
-            publish_date = date_match.group()
-
-        # 核心：地毯式擷取新聞內文的所有文字 (一字不漏)
-        # 鎖定 DSAT 專用的內容容器
-        content_container = soup.select_one(".news_content") or soup.select_one("#news_content")
-
-        if content_container:
-            # 獲取所有段落、編號文字內容
-            # separator=' ' 確保文字間有間隔，strip=True 移除頭尾空白
-            raw_text = content_container.get_text(separator=' ', strip=True)
-            # 將多個空白或換行符號整合成一個空格，確保文字流完整
-            full_content = re.sub(r'\s+', ' ', raw_text)
-        else:
-            # 備案：如果抓不到容器，就抓取所有 p 標籤內容
-            full_content = " ".join([p.get_text(strip=True) for p in soup.find_all('p')])
-
-        # 寫入 JSON
-        output_data = {
-            "title": title,
-            "date": publish_date,
-            "fullText": full_content
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>DSAT 交通資訊自動廣播屏</title>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --dsat-red: #e63946;
+            --text-gold: #ffca28;
+            --page-info: rgba(255, 255, 255, 0.35);
         }
 
-        with open('data.json', 'w', encoding='utf-8') as f:
-            json.dump(output_data, f, ensure_ascii=False, indent=2)
-            
-        print(f"成功擷取全文: {title}")
+        body {
+            margin: 0; background: var(--bg-color); color: white;
+            font-family: "PingFang HK", "Microsoft JhengHei", sans-serif;
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+        }
 
-    except Exception as e:
-        print(f"錯誤: {e}")
+        /* 標題欄：僅放新聞標題 */
+        .header {
+            background: var(--dsat-red); padding: 2.5vh; font-size: 4.5vh;
+            font-weight: 900; text-align: center; position: relative;
+            display: flex; justify-content: center; align-items: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
 
-if __name__ == "__main__":
-    auto_scrape_dsat()
+        /* 日期：獨立於標題之外，靠左顯示 */
+        .publish-date {
+            position: absolute; left: 30px; font-size: 2.8vh;
+            color: rgba(255, 255, 255, 0.9); font-weight: normal;
+            font-family: Arial, sans-serif;
+        }
+
+        .controls { position: absolute; right: 20px; display: flex; gap: 10px; }
+        .btn { background: rgba(255,255,255,0.2); border: 2px solid #fff; color: #fff; padding: 10px 20px; cursor: pointer; border-radius: 6px; font-size: 1.2rem; }
+        .btn:hover { background: #fff; color: #000; }
+
+        /* 主顯示區：內文分頁 */
+        .main-display { 
+            flex: 1; display: flex; justify-content: center; align-items: center; 
+            padding: 0 8vw; position: relative; 
+        }
+
+        /* 內文字體放大 20% (6.5vh) */
+        #ui-content { 
+            font-size: 6.5vh; line-height: 1.7; color: #fff; text-align: justify; 
+            width: 100%; transition: opacity 0.4s; font-weight: 500;
+        }
+
+        /* 右下角淺色分頁標示 */
+        .page-counter {
+            position: absolute; bottom: 4vh; right: 4vw;
+            font-size: 3.5vh; color: var(--page-info);
+        }
+
+        /* 底部走字：新聞標題滾動 */
+        .marquee-wrapper {
+            background: #111; height: 13vh; border-top: 5px solid var(--text-gold);
+            display: flex; align-items: center; overflow: hidden; position: relative;
+        }
+        #marquee-text { 
+            white-space: nowrap; font-size: 6.5vh; font-weight: bold; 
+            color: var(--text-gold); position: absolute; 
+        }
+
+        #overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.98);
+            z-index: 1000; display: flex; justify-content: center; align-items: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="overlay">
+        <button class="btn" style="font-size: 2.5rem; padding: 30px 70px;" onclick="initSystem()">啟動廣播監控系統</button>
+    </div>
+
+    <div class="header">
+        <div id="ui-date" class="publish-date">--/--/----</div>
+        <span id="ui-title">同步中...</span>
+        <div class="controls">
+            <button class="btn" onclick="resumeApp()">▶ 播放</button>
+            <button class="btn" onclick="pauseApp()">⏸ 暫停</button>
+            <button class="btn" onclick="stopApp()">⏹ 停止</button>
+        </div>
+    </div>
+
+    <div class="main-display">
+        <div id="ui-content">正在獲取資料...</div>
+        <div id="ui-page" class="page-counter"></div>
+    </div>
+
+    <div class="marquee-wrapper">
+        <div id="marquee-text">正在載入最新交通資訊...</div>
+    </div>
+
+    <script>
+        let isStopped = true;
+        let currentIter = 0;
+        let pages = [];
+        let marqueePos = window.innerWidth;
+        const synth = window.speechSynthesis;
+
+        // 智慧分頁：嚴格在標點處切斷
+        function smartSplit(text, maxLength = 80) {
+            const result = [];
+            let currentStr = "";
+            const chunks = text.split(/([。；！？])/).filter(Boolean);
+
+            for (let i = 0; i < chunks.length; i++) {
+                let s = chunks[i];
+                if ((currentStr + s).length > maxLength && currentStr !== "") {
+                    result.push(currentStr);
+                    currentStr = "";
+                }
+                currentStr += s;
+            }
+            if (currentStr) result.push(currentStr);
+            return result;
+        }
+
+        async function updateNewsData() {
+            try {
+                const res = await fetch('data.json?t=' + Date.now());
+                const data = await res.json();
+                
+                // 1. 設置標題、日期
+                document.getElementById('ui-title').innerText = data.title;
+                document.getElementById('ui-date').innerText = data.date;
+                
+                // 2. 設置走字內容 (放新聞標題)
+                document.getElementById('marquee-text').innerText = "【最新消息】" + data.title;
+                
+                // 3. 處理內文分頁
+                pages = smartSplit(data.fullText);
+                
+                if (!isStopped) startBroadcast();
+            } catch (e) {
+                console.error("Data.json 尚未準備好");
+            }
+        }
+
+        function initSystem() {
+            document.getElementById('overlay').style.display = 'none';
+            isStopped = false;
+            updateNewsData();
+            startMarquee();
+            setInterval(updateNewsData, 600000); // 10分鐘檢查一次更新
+        }
+
+        async function startBroadcast() {
+            currentIter++;
+            const iterId = currentIter;
+            const contentEl = document.getElementById('ui-content');
+            const pageEl = document.getElementById('ui-page');
+
+            for (let i = 0; i < pages.length; i++) {
+                if (isStopped || iterId !== currentIter) break;
+                
+                contentEl.style.opacity = "0";
+                await new Promise(r => setTimeout(r, 400));
+                
+                pageEl.innerText = `${i + 1} / ${pages.length}`;
+                contentEl.innerText = pages[i];
+                contentEl.style.opacity = "1";
+                
+                await speak(pages[i]);
+                if (!isStopped) await new Promise(r => setTimeout(r, 1200));
+            }
+            if (!isStopped && iterId === currentIter) startBroadcast();
+        }
+
+        function speak(text) {
+            return new Promise((resolve) => {
+                const utter = new SpeechSynthesisUtterance(text);
+                utter.lang = 'zh-HK';
+                utter.rate = 0.9;
+                utter.onend = resolve;
+                utter.onerror = resolve;
+                synth.speak(utter);
+            });
+        }
+
+        function stopApp() {
+            isStopped = true;
+            synth.cancel();
+            document.getElementById('ui-content').innerText = "系統已停機";
+            document.getElementById('ui-page').innerText = "";
+        }
+
+        function resumeApp() {
+            if (isStopped) {
+                isStopped = false;
+                startBroadcast();
+            } else {
+                synth.resume();
+            }
+        }
+
+        function pauseApp() { synth.pause(); }
+
+        function startMarquee() {
+            const marquee = document.getElementById('marquee-text');
+            function animate() {
+                if (!isStopped && !synth.paused) {
+                    marqueePos -= 2.5; 
+                    if (marqueePos < -marquee.offsetWidth) marqueePos = window.innerWidth;
+                    marquee.style.transform = `translateX(${marqueePos}px)`;
+                }
+                requestAnimationFrame(animate);
+            }
+            animate();
+        }
+    </script>
+</body>
+</html>

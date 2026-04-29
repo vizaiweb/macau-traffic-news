@@ -1,86 +1,50 @@
-<!DOCTYPE html>
-<html lang="zh-Hant">
-<head>
-    <meta charset="UTF-8">
-    <style>
-        body { margin: 0; background: #050505; color: white; font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-        .header { height: 12vh; background: #e63946; display: flex; align-items: center; justify-content: center; position: relative; z-index: 100; }
-        .publish-date { position: absolute; left: 20px; font-size: 2.5vh; }
-        #ui-title { font-size: 4.5vh; font-weight: bold; width: 60%; text-align: center; }
+import requests
+from bs4 import BeautifulSoup
+import json
+import re
+
+def auto_scrape_dsat():
+    # 這裡放你要擷取的詳細頁網址
+    target_url = "https://www.dsat.gov.mo/dsat/news_detail.aspx?a_id=6411412D3DE9A671E1D150550511DAD9"
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+
+    try:
+        res = requests.get(target_url, headers=headers, timeout=15)
+        res.encoding = 'utf-8'
+        soup = BeautifulSoup(res.text, 'html.parser')
+
+        # 鎖定大容器
+        main_container = soup.find(class_='my_content')
+        if not main_container: return
+
+        # 提取標題
+        title_tag = main_container.find(class_='content_title')
+        title = title_tag.get_text(strip=True) if title_tag else "交通消息"
         
-        /* 內容顯示區：增加放大 20% 字體，並防止覆蓋 */
-        .main-content { flex: 1; display: flex; justify-content: center; align-items: center; padding: 0 8vw; position: relative; z-index: 50; }
-        #ui-text { font-size: 6.5vh; line-height: 1.6; text-align: justify; }
+        # 清洗內容：移除標題標籤、圖片、網址、圖片說明
+        if title_tag: title_tag.decompose()
+        for noise in main_container.find_all(['img', 'script', 'style', 'a', 'button']):
+            noise.decompose()
+
+        # 獲取純文字
+        raw_text = main_container.get_text(separator=' ', strip=True)
         
-        /* 走字區：確保在最底層且不被蓋住 */
-        .footer { height: 12vh; background: #111; border-top: 4px solid #ffca28; position: relative; z-index: 100; overflow: hidden; display: flex; align-items: center; }
-        #marquee { white-space: nowrap; font-size: 6vh; color: #ffca28; position: absolute; font-weight: bold; }
-        
-        #overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000; display: flex; justify-content: center; align-items: center; }
-        .btn { padding: 20px 50px; font-size: 3vh; cursor: pointer; }
-    </style>
-</head>
-<body>
-    <div id="overlay"><button class="btn" onclick="start()">啟動廣播系統</button></div>
-    <div class="header">
-        <div id="ui-date" class="publish-date">--/--/----</div>
-        <div id="ui-title">載入中...</div>
-    </div>
-    <div class="main-content"><div id="ui-text">等待數據...</div></div>
-    <div class="footer"><div id="marquee">載入中...</div></div>
+        # 排除圖片敍述 (例如: 2026年...措施_官也街)
+        clean_text = re.sub(r'[^。；！？]*_[\u4e00-\u9fa5]+', '', raw_text)
+        # 排除網址和雜訊
+        clean_text = re.sub(r'https?://\S+', '', clean_text)
+        clean_text = clean_text.replace('>>>', '').strip()
 
-    <script>
-        let pages = [];
-        let cur = 0;
-        let isPlay = false;
-        let mPos = window.innerWidth;
+        with open('data.json', 'w', encoding='utf-8') as f:
+            json.dump({
+                "title": title,
+                "date": "2026-04-29",
+                "fullText": clean_text
+            }, f, ensure_ascii=False, indent=2)
+        print("JSON 更新完成")
 
-        async function load() {
-            const r = await fetch('data.json?v=' + Date.now());
-            const d = await r.json();
-            document.getElementById('ui-title').innerText = d.title;
-            document.getElementById('ui-date').innerText = d.date;
-            document.getElementById('marquee').innerText = "【最新消息】" + d.title;
-            
-            // 智慧分頁 (60字一頁)
-            pages = d.fullText.match(/[^。；！？]+[。；！？]/g) || [d.fullText];
-            if (isPlay) play();
-        }
+    except Exception as e:
+        print(f"抓取失敗: {e}")
 
-        function start() {
-            document.getElementById('overlay').style.display = 'none';
-            isPlay = true;
-            load();
-            setInterval(load, 600000);
-            animate();
-        }
-
-        async function play() {
-            const txt = document.getElementById('ui-text');
-            for (let i = 0; i < pages.length; i++) {
-                txt.innerText = pages[i];
-                await speak(pages[i]);
-                await new Promise(r => setTimeout(r, 1000));
-            }
-            play(); // 循環播放
-        }
-
-        function speak(t) {
-            return new Promise(res => {
-                const u = new SpeechSynthesisUtterance(t);
-                u.lang = 'zh-HK'; u.rate = 0.9;
-                u.onend = res;
-                window.speechSynthesis.speak(u);
-            });
-        }
-
-        function animate() {
-            const m = document.getElementById('marquee');
-            mPos -= 2;
-            if (mPos < -m.offsetWidth) mPos = window.innerWidth;
-            m.style.transform = `translateX(${mPos}px)`;
-            requestAnimationFrame(animate);
-        }
-    </script>
-</body>
-</html>
+if __name__ == "__main__":
+    auto_scrape_dsat()

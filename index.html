@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>DSAT 交通廣播 - 完整功能版</title>
+    <title>DSAT 交通廣播系統 - 實戰版</title>
     <style>
         :root {
             --bg-color: #050505;
@@ -17,16 +17,17 @@
             height: 100vh; display: flex; flex-direction: column; overflow: hidden;
         }
 
-        /* 標題欄：新增日期位置 */
+        /* 標題欄 */
         .header {
-            background: var(--dsat-red); padding: 2vh; font-size: 4vh;
+            background: var(--dsat-red); padding: 2vh; font-size: 4.2vh;
             font-weight: 900; text-align: center; position: relative;
             display: flex; justify-content: center; align-items: center;
         }
 
+        /* 左側日期：同步截圖內容 */
         .publish-date {
-            position: absolute; left: 20px; font-size: 2.5vh;
-            color: rgba(255, 255, 255, 0.8); font-weight: normal;
+            position: absolute; left: 20px; font-size: 2.8vh;
+            color: rgba(255, 255, 255, 0.9); font-weight: normal;
         }
 
         .controls {
@@ -34,26 +35,23 @@
         }
 
         .btn {
-            background: rgba(255,255,255,0.15); border: 1px solid #fff; color: #fff;
-            padding: 8px 18px; cursor: pointer; border-radius: 4px; font-size: 1.2rem;
+            background: rgba(255,255,255,0.2); border: 2px solid #fff; color: #fff;
+            padding: 8px 18px; cursor: pointer; border-radius: 4px; font-size: 1.1rem;
         }
-
-        .btn:hover { background: #fff; color: #000; }
 
         /* 內容區 */
         .main-display { 
             flex: 1; display: flex; justify-content: center; align-items: center; 
-            padding: 0 8vw; position: relative; 
+            padding: 0 7vw; position: relative; 
         }
 
         #ui-content { 
-            font-size: 5vh; line-height: 1.7; color: #fff; text-align: justify; 
-            width: 100%;
+            font-size: 5.2vh; line-height: 1.7; color: #fff; text-align: justify; width: 100%;
         }
 
         .page-counter {
             position: absolute; bottom: 3vh; right: 4vw;
-            font-size: 3vh; color: var(--page-info);
+            font-size: 3.2vh; color: var(--page-info);
         }
 
         /* 底部走字 */
@@ -76,7 +74,7 @@
     </div>
 
     <div class="header">
-        <div id="ui-date" class="publish-date">2026/04/29</div>
+        <div id="ui-date" class="publish-date">--/--/----</div>
         <span id="ui-title">載入中...</span>
         <div class="controls">
             <button class="btn" onclick="resumeApp()">▶ 播放</button>
@@ -86,7 +84,7 @@
     </div>
 
     <div class="main-display">
-        <div id="ui-content">點擊播放開始讀取內容...</div>
+        <div id="ui-content">等待播放...</div>
         <div id="ui-page" class="page-counter"></div>
     </div>
 
@@ -96,24 +94,21 @@
 
     <script>
         const news = {
-            date: "2026/04/29",
-            title: "五一交通安排協調部署",
-            // 內文已確保包含你提供的所有文字
-            fullText: "為保障五一勞動節假期期間市民和旅客出行暢順，並平衡遊客與居民的出行需求，交通事務局按照恆常跨部門協作機制，聯同治安警察局、海關、市政署、巴士公司、跨境客運、綜合度假休閒企業及酒店（下簡稱“休企＂）、關閘東側站場管理公司等舉行協調會議，透過協調公共巴士及輕軌服務、完善口岸交通配套、強化實時訊息發佈、制訂應急預案等，以有效疏導假期人流。",
-            highlights: "【重點】增開 3BX, 17T, 21AT, 26AT, 101XS 路線；輕軌延長服務；舊城區實施臨時行人專用區。"
+            date: "28-04-2026", // 依據截圖更新
+            title: "跨部門提前協調部署五一交通安排",
+            // 內文從日期開始，確保一字不漏
+            fullText: "日期：28-04-2026。為保障五一勞動節假期期間市民和旅客出行暢順，並平衡遊客與居民的出行需求，交通事務局按照恆常跨部門協作機制，聯同治安警察局、海關、市政署、巴士公司、跨境客運、綜合度假休閒企業及酒店（下簡稱“休企＂）、關閘東側站場管理公司等舉行協調會議，透過協調公共巴士及輕軌服務、完善口岸交通配套、強化實時訊息發佈、制訂應急預案等，以有效疏導假期人流。",
+            highlights: "【重點內容】五一期間增開 3BX, 17T, 21AT, 26AT, 101XS 巴士線；輕軌延長服務；舊城區實施臨時行人專用區。"
         };
 
-        let isRunning = false;
+        const synth = window.speechSynthesis;
         let isStopped = true;
         let marqueePos = window.innerWidth;
-        const synth = window.speechSynthesis;
-        
-        // 分頁逻辑：確保一字不漏
+        let currentIter = 0;
+
         function splitText(text, size = 80) {
             const arr = [];
-            for (let i = 0; i < text.length; i += size) {
-                arr.push(text.substring(i, i + size));
-            }
+            for (let i = 0; i < text.length; i += size) arr.push(text.substring(i, i + size));
             return arr;
         }
         const pages = splitText(news.fullText);
@@ -124,76 +119,60 @@
             document.getElementById('ui-date').innerText = news.date;
             document.getElementById('marquee-text').innerText = news.highlights;
             startMarquee();
-            resumeApp(); // 啟動時直接播放
+            resumeApp();
         }
 
-        async function playSequence() {
-            if (isStopped) return;
-            
+        async function playSequence(iterId) {
+            if (isStopped || iterId !== currentIter) return;
             const contentEl = document.getElementById('ui-content');
             const pageEl = document.getElementById('ui-page');
 
             for (let i = 0; i < pages.length; i++) {
-                if (isStopped) break;
-                
-                // 更新 UI
+                if (isStopped || iterId !== currentIter) break;
                 pageEl.innerText = `${i + 1} / ${pages.length}`;
                 contentEl.innerText = pages[i];
-                
-                // 等待語音播放完畢
                 await speak(pages[i]);
-                
-                // 短暫停頓進入下一頁
-                if (!isStopped) await new Promise(r => setTimeout(r, 600));
+                if (!isStopped) await new Promise(r => setTimeout(r, 800));
             }
-            
-            // 循環播放邏輯
-            if (!isStopped) playSequence();
+            if (!isStopped && iterId === currentIter) playSequence(iterId);
         }
 
         function speak(text) {
             return new Promise((resolve) => {
                 const utter = new SpeechSynthesisUtterance(text);
                 utter.lang = 'zh-HK';
-                utter.rate = 0.9;
+                utter.rate = 0.92; // 調整語速
                 utter.onend = resolve;
-                utter.onerror = resolve; // 防止報錯導致卡死
+                utter.onerror = resolve;
                 synth.speak(utter);
             });
         }
 
-        // --- 控制邏輯修復 ---
-
         function resumeApp() {
             if (synth.paused) {
                 synth.resume();
-                isRunning = true;
             } else if (isStopped) {
+                synth.cancel();
                 isStopped = false;
-                isRunning = true;
-                playSequence(); // 從頭開始
+                currentIter++;
+                playSequence(currentIter);
             }
         }
 
-        function pauseApp() {
-            synth.pause();
-            isRunning = false;
-        }
+        function pauseApp() { synth.pause(); }
 
         function stopApp() {
             isStopped = true;
-            isRunning = false;
-            synth.cancel(); // 徹底清空語音隊列
+            synth.cancel();
             document.getElementById('ui-content').innerText = "播放已停止";
             document.getElementById('ui-page').innerText = "";
-            marqueePos = window.innerWidth; // 走字歸位
         }
 
         function startMarquee() {
             const marquee = document.getElementById('marquee-text');
             function animate() {
-                if (isRunning && !isStopped) {
-                    marqueePos -= 2;
+                if (!isStopped && !synth.paused) {
+                    marqueePos -= 2.2;
                     if (marqueePos < -marquee.offsetWidth) marqueePos = window.innerWidth;
                     marquee.style.transform = `translateX(${marqueePos}px)`;
                 }

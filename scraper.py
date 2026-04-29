@@ -4,7 +4,7 @@ import json
 import re
 
 def auto_scrape_dsat():
-    # 這是你提供的新聞連結
+    # 請替換為你實際要抓取的 DSAT 詳細頁網址
     target_url = "https://www.dsat.gov.mo/dsat/news_detail.aspx?a_id=6411412D3DE9A671E1D150550511DAD9"
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -15,32 +15,37 @@ def auto_scrape_dsat():
         res.encoding = 'utf-8'
         soup = BeautifulSoup(res.text, 'html.parser')
 
-        # 擷取標題
-        title_tag = soup.select_one(".news_title") or soup.find('h1')
-        title = title_tag.get_text(strip=True) if title_tag else "DSAT 交通新聞"
+        # 1. 定位主容器 class="my_content"
+        main_container = soup.find(class_='my_content')
+        
+        if not main_container:
+            # 容錯機制：如果網頁結構變動，嘗試之前的標籤
+            main_container = soup.find(class_='news_content') or soup.find(id='news_content')
 
-        # 擷取日期 (從文字內容中尋找日期格式)
-        publish_date = "28-04-2026"
-        date_area = soup.select_one(".news_info") or soup
-        date_match = re.search(r'\d{2}-\d{2}-\d{4}', date_area.get_text())
-        if date_match:
-            publish_date = date_match.group()
+        if main_container:
+            # 2. 提取標題 class="content_title"
+            # 使用 find 尋找容器內的標題
+            title_tag = main_container.find(class_='content_title')
+            if title_tag:
+                title = title_tag.get_text(strip=True)
+                # 為了避免標題重複出現在正文中，我們可以將其從容器中暫時「挖掉」
+                title_tag.decompose() 
+            else:
+                title = "交通事務局最新消息"
 
-        # 核心：地毯式擷取新聞內文的所有文字 (一字不漏)
-        # 鎖定 DSAT 專用的內容容器
-        content_container = soup.select_one(".news_content") or soup.select_one("#news_content")
+            # 3. 提取日期 (尋找特定的日期模式)
+            date_match = re.search(r'\d{2}-\d{2}-\d{4}', main_container.get_text())
+            publish_date = date_match.group() if date_match else "29-04-2026"
 
-        if content_container:
-            # 獲取所有段落、編號文字內容
-            # separator=' ' 確保文字間有間隔，strip=True 移除頭尾空白
-            raw_text = content_container.get_text(separator=' ', strip=True)
-            # 將多個空白或換行符號整合成一個空格，確保文字流完整
-            full_content = re.sub(r'\s+', ' ', raw_text)
+            # 4. 擷取其餘所有文字內容 (一字不漏)
+            # 因為標題已經 decompose 了，這裡 get_text 拿到的就是剩下的所有內容
+            full_content = main_container.get_text(separator=' ', strip=True)
+            # 清理多餘空格
+            full_content = re.sub(r'\s+', ' ', full_content)
         else:
-            # 備案：如果抓不到容器，就抓取所有 p 標籤內容
-            full_content = " ".join([p.get_text(strip=True) for p in soup.find_all('p')])
+            raise ValueError("找不到 class='my_content' 容器")
 
-        # 寫入 JSON
+        # 5. 存儲數據
         output_data = {
             "title": title,
             "date": publish_date,
@@ -50,10 +55,10 @@ def auto_scrape_dsat():
         with open('data.json', 'w', encoding='utf-8') as f:
             json.dump(output_data, f, ensure_ascii=False, indent=2)
             
-        print(f"成功擷取全文: {title}")
+        print(f"成功擷取！標題：{title}")
 
     except Exception as e:
-        print(f"錯誤: {e}")
+        print(f"抓取失敗: {str(e)}")
 
 if __name__ == "__main__":
     auto_scrape_dsat()

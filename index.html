@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DSAT 交通消息實時廣播</title>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --dsat-red: #e63946;
+            --text-gold: #ffca28;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg-color);
+            color: white;
+            font-family: "PingFang HK", "Heiti TC", "Microsoft JhengHei", sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* 頂部標題 */
+        .header {
+            background: var(--dsat-red);
+            padding: 2vh;
+            font-size: 5vh;
+            font-weight: 900;
+            text-align: center;
+            letter-spacing: 5px;
+            box-shadow: 0 4px 15px rgba(230, 57, 70, 0.4);
+        }
+
+        /* 中央內容區 */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 0 5vw;
+            text-align: center;
+        }
+
+        .news-title {
+            font-size: 6vh;
+            color: white;
+            margin-bottom: 3vh;
+            border-bottom: 2px solid var(--dsat-red);
+            padding-bottom: 10px;
+        }
+
+        .news-body {
+            font-size: 4.5vh;
+            line-height: 1.6;
+            color: #ddd;
+            max-width: 90%;
+        }
+
+        /* 底部走字區域 */
+        .marquee-wrapper {
+            background: #1a1a1a;
+            height: 12vh;
+            border-top: 4px solid var(--text-gold);
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #marquee-text {
+            white-space: nowrap;
+            font-size: 6vh;
+            font-weight: bold;
+            color: var(--text-gold);
+            position: absolute;
+            will-change: transform;
+        }
+
+        /* 啟動遮罩 */
+        #overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.95);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        button {
+            background: var(--dsat-red);
+            color: white;
+            border: none;
+            padding: 20px 50px;
+            font-size: 30px;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        button:hover { transform: scale(1.1); }
+    </style>
+</head>
+<body>
+
+    <div id="overlay">
+        <h1 style="color:white; margin-bottom:40px;">澳門交通消息廣播系統</h1>
+        <button onclick="startApp()">啟動播放系統</button>
+    </div>
+
+    <div class="header">最新交通消息</div>
+
+    <div class="main-content">
+        <div id="ui-title" class="news-title">正在獲取資訊...</div>
+        <div id="ui-content" class="news-body">請確保網絡連接正常</div>
+    </div>
+
+    <div class="marquee-wrapper">
+        <div id="marquee-text"></div>
+    </div>
+
+    <script>
+        let lastMsgId = null;
+        let isSpeaking = false;
+
+        async function fetchNews() {
+            try {
+                // 讀取同目錄下的 data.json (由 GitHub Actions 產生)
+                // 加隨機參數防止緩存
+                const res = await fetch(`data.json?t=${Date.now()}`);
+                const data = await res.json();
+
+                // 檢查是否已過期 (自動下架邏輯)
+                const now = new Date();
+                const expireAt = new Date(data.expire_at);
+
+                if (now > expireAt) {
+                    showIdle();
+                    return;
+                }
+
+                // 只有新 ID 才會觸發語音播放
+                if (data.id !== lastMsgId) {
+                    updateDisplay(data);
+                    lastMsgId = data.id;
+                    playVoice(data);
+                }
+            } catch (e) {
+                console.error("無法獲取數據", e);
+            }
+        }
+
+        function updateDisplay(data) {
+            document.getElementById('ui-title').innerText = data.title;
+            document.getElementById('ui-content').innerText = data.content;
+            const marquee = document.getElementById('marquee-text');
+            marquee.innerText = `【最新消息】${data.title}：${data.content}`;
+        }
+
+        function showIdle() {
+            document.getElementById('ui-title').innerText = "暫無即時交通消息";
+            document.getElementById('ui-content').innerText = "祝您出行平安";
+            document.getElementById('marquee-text').innerText = "歡迎使用澳門交通消息廣播系統";
+        }
+
+        function playVoice(data) {
+            if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
+
+            const textToSpeak = `${data.title}。${data.content}`;
+            const utter = new SpeechSynthesisUtterance(textToSpeak);
+            utter.lang = 'zh-HK';
+            utter.rate = 0.9;
+
+            const marquee = document.getElementById('marquee-text');
+            const screenWidth = window.innerWidth;
+            
+            utter.onstart = () => {
+                // 文字開始滾動
+                const textWidth = marquee.offsetWidth;
+                marquee.style.transition = 'none';
+                marquee.style.transform = `translateX(${screenWidth}px)`;
+                
+                // 強制重繪
+                marquee.offsetHeight; 
+
+                // 動態計算滾動時間，使之儘量與語音長度匹配 (經驗公式)
+                const duration = Math.max(textToSpeak.length * 0.35, 15); 
+                marquee.style.transition = `transform ${duration}s linear`;
+                marquee.style.transform = `translateX(-${textWidth}px)`;
+            };
+
+            window.speechSynthesis.speak(utter);
+        }
+
+        function startApp() {
+            document.getElementById('overlay').style.display = 'none';
+            // 首次加載
+            fetchNews();
+            // 每 60 秒輪詢一次 JSON 文件
+            setInterval(fetchNews, 60000);
+        }
+    </script>
+</body>
+</html>

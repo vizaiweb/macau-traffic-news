@@ -2,168 +2,84 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>DSAT 廣播系統</title>
     <style>
-        :root {
-            --bg-color: #050505;
-            --dsat-red: #e63946;
-            --text-gold: #ffca28;
-            --page-info: rgba(255, 255, 255, 0.3);
-        }
-
-        body {
-            margin: 0; background: var(--bg-color); color: white;
-            font-family: "PingFang HK", "Microsoft JhengHei", sans-serif;
-            height: 100vh; width: 100vw; display: flex; flex-direction: column; overflow: hidden;
-        }
-
-        /* 標題區：固定高度，絕不重疊 */
-        .header {
-            height: 12vh; background: var(--dsat-red);
-            display: flex; justify-content: center; align-items: center;
-            position: relative; z-index: 10; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-        }
-
-        .publish-date {
-            position: absolute; left: 30px; font-size: 2.8vh; font-weight: normal;
-        }
-
-        #ui-title {
-            font-size: 4.2vh; font-weight: 900; max-width: 65%;
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
-
-        .controls { position: absolute; right: 20px; display: flex; gap: 10px; }
-        .btn { background: rgba(255,255,255,0.2); border: 2px solid #fff; color: #fff; padding: 8px 15px; cursor: pointer; border-radius: 4px; }
-
-        /* 內容區：自動伸縮 */
-        .main-display { 
-            flex: 1; display: flex; justify-content: center; align-items: center; 
-            padding: 0 7vw; position: relative; overflow: hidden;
-        }
-
-        #ui-content { 
-            font-size: 6.5vh; line-height: 1.6; color: #fff; text-align: justify; 
-            width: 100%; transition: opacity 0.4s; font-weight: 500;
-        }
-
-        .page-counter { position: absolute; bottom: 3vh; right: 4vw; font-size: 3.5vh; color: var(--page-info); }
-
-        /* 底部走字區 */
-        .marquee-wrapper {
-            height: 12vh; background: #111; border-top: 5px solid var(--text-gold);
-            display: flex; align-items: center; overflow: hidden; position: relative;
-        }
-        #marquee-text { white-space: nowrap; font-size: 6vh; font-weight: bold; color: var(--text-gold); position: absolute; }
-
-        #overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.98); z-index: 1000; display: flex; justify-content: center; align-items: center; }
+        body { margin: 0; background: #050505; color: white; font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        .header { height: 12vh; background: #e63946; display: flex; align-items: center; justify-content: center; position: relative; z-index: 100; }
+        .publish-date { position: absolute; left: 20px; font-size: 2.5vh; }
+        #ui-title { font-size: 4.5vh; font-weight: bold; width: 60%; text-align: center; }
+        
+        /* 內容顯示區：增加放大 20% 字體，並防止覆蓋 */
+        .main-content { flex: 1; display: flex; justify-content: center; align-items: center; padding: 0 8vw; position: relative; z-index: 50; }
+        #ui-text { font-size: 6.5vh; line-height: 1.6; text-align: justify; }
+        
+        /* 走字區：確保在最底層且不被蓋住 */
+        .footer { height: 12vh; background: #111; border-top: 4px solid #ffca28; position: relative; z-index: 100; overflow: hidden; display: flex; align-items: center; }
+        #marquee { white-space: nowrap; font-size: 6vh; color: #ffca28; position: absolute; font-weight: bold; }
+        
+        #overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000; display: flex; justify-content: center; align-items: center; }
+        .btn { padding: 20px 50px; font-size: 3vh; cursor: pointer; }
     </style>
 </head>
 <body>
-
-    <div id="overlay">
-        <button class="btn" style="font-size: 2.5rem; padding: 25px 60px;" onclick="initSystem()">啟動廣播系統</button>
-    </div>
-
-    <header class="header">
+    <div id="overlay"><button class="btn" onclick="start()">啟動廣播系統</button></div>
+    <div class="header">
         <div id="ui-date" class="publish-date">--/--/----</div>
-        <div id="ui-title">同步中...</div>
-        <div class="controls">
-            <button class="btn" onclick="resumeApp()">▶</button>
-            <button class="btn" onclick="pauseApp()">⏸</button>
-            <button class="btn" onclick="stopApp()">⏹</button>
-        </div>
-    </header>
-
-    <main class="main-display">
-        <div id="ui-content">載入中...</div>
-        <div id="ui-page" class="page-counter"></div>
-    </main>
-
-    <footer class="marquee-wrapper">
-        <div id="marquee-text">正在載入新聞...</div>
-    </footer>
+        <div id="ui-title">載入中...</div>
+    </div>
+    <div class="main-content"><div id="ui-text">等待數據...</div></div>
+    <div class="footer"><div id="marquee">載入中...</div></div>
 
     <script>
-        let isStopped = true;
-        let currentIter = 0;
         let pages = [];
-        let marqueePos = window.innerWidth;
-        const synth = window.speechSynthesis;
+        let cur = 0;
+        let isPlay = false;
+        let mPos = window.innerWidth;
 
-        function smartSplit(text, maxLength = 65) {
-            const result = [];
-            let currentStr = "";
-            const chunks = text.split(/([。；！？])/).filter(Boolean);
-            for (let s of chunks) {
-                if ((currentStr + s).length > maxLength && currentStr !== "") {
-                    result.push(currentStr);
-                    currentStr = "";
-                }
-                currentStr += s;
-            }
-            if (currentStr) result.push(currentStr);
-            return result;
+        async function load() {
+            const r = await fetch('data.json?v=' + Date.now());
+            const d = await r.json();
+            document.getElementById('ui-title').innerText = d.title;
+            document.getElementById('ui-date').innerText = d.date;
+            document.getElementById('marquee').innerText = "【最新消息】" + d.title;
+            
+            // 智慧分頁 (60字一頁)
+            pages = d.fullText.match(/[^。；！？]+[。；！？]/g) || [d.fullText];
+            if (isPlay) play();
         }
 
-        async function updateData() {
-            try {
-                const res = await fetch('data.json?t=' + Date.now());
-                const data = await res.json();
-                document.getElementById('ui-title').innerText = data.title;
-                document.getElementById('ui-date').innerText = data.date;
-                document.getElementById('marquee-text').innerText = "【最新交通消息】" + data.title;
-                pages = smartSplit(data.fullText);
-                if (!isStopped) startBroadcast();
-            } catch (e) { console.error("Waiting for JSON..."); }
-        }
-
-        function initSystem() {
+        function start() {
             document.getElementById('overlay').style.display = 'none';
-            isStopped = false;
-            updateData();
-            startMarquee();
-            setInterval(updateData, 600000);
+            isPlay = true;
+            load();
+            setInterval(load, 600000);
+            animate();
         }
 
-        async function startBroadcast() {
-            currentIter++;
-            const iterId = currentIter;
+        async function play() {
+            const txt = document.getElementById('ui-text');
             for (let i = 0; i < pages.length; i++) {
-                if (isStopped || iterId !== currentIter) break;
-                document.getElementById('ui-page').innerText = `${i + 1} / ${pages.length}`;
-                document.getElementById('ui-content').innerText = pages[i];
+                txt.innerText = pages[i];
                 await speak(pages[i]);
-                await new Promise(r => setTimeout(r, 1200));
+                await new Promise(r => setTimeout(r, 1000));
             }
-            if (!isStopped && iterId === currentIter) startBroadcast();
+            play(); // 循環播放
         }
 
-        function speak(text) {
-            return new Promise((resolve) => {
-                const utter = new SpeechSynthesisUtterance(text);
-                utter.lang = 'zh-HK';
-                utter.rate = 0.9;
-                utter.onend = resolve;
-                synth.speak(utter);
+        function speak(t) {
+            return new Promise(res => {
+                const u = new SpeechSynthesisUtterance(t);
+                u.lang = 'zh-HK'; u.rate = 0.9;
+                u.onend = res;
+                window.speechSynthesis.speak(u);
             });
         }
 
-        function stopApp() { isStopped = true; synth.cancel(); document.getElementById('ui-content').innerText = "系統已停機"; }
-        function resumeApp() { if (isStopped) { isStopped = false; startBroadcast(); } else { synth.resume(); } }
-        function pauseApp() { synth.pause(); }
-
-        function startMarquee() {
-            const marquee = document.getElementById('marquee-text');
-            function animate() {
-                if (!isStopped && !synth.paused) {
-                    marqueePos -= 2;
-                    if (marqueePos < -marquee.offsetWidth) marqueePos = window.innerWidth;
-                    marquee.style.transform = `translateX(${marqueePos}px)`;
-                }
-                requestAnimationFrame(animate);
-            }
-            animate();
+        function animate() {
+            const m = document.getElementById('marquee');
+            mPos -= 2;
+            if (mPos < -m.offsetWidth) mPos = window.innerWidth;
+            m.style.transform = `translateX(${mPos}px)`;
+            requestAnimationFrame(animate);
         }
     </script>
 </body>

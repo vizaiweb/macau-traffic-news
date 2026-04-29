@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>DSAT 交通資訊自動廣播屏</title>
+    <title>DSAT 廣播系統</title>
     <style>
         :root {
             --bg-color: #050505;
@@ -11,68 +11,50 @@
             --page-info: rgba(255, 255, 255, 0.3);
         }
 
-        /* 核心修復：強制禁止全身滾動 */
         body {
             margin: 0; background: var(--bg-color); color: white;
             font-family: "PingFang HK", "Microsoft JhengHei", sans-serif;
-            height: 100vh; width: 100vw;
-            display: flex; flex-direction: column; 
-            overflow: hidden; 
+            height: 100vh; width: 100vw; display: flex; flex-direction: column; overflow: hidden;
         }
 
-        /* 標題區：固定高度 */
+        /* 標題區：固定高度，絕不重疊 */
         .header {
-            height: 12vh; min-height: 80px;
-            background: var(--dsat-red); 
+            height: 12vh; background: var(--dsat-red);
             display: flex; justify-content: center; align-items: center;
-            position: relative; z-index: 10;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+            position: relative; z-index: 10; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
 
         .publish-date {
-            position: absolute; left: 30px; font-size: 2.5vh;
-            color: rgba(255, 255, 255, 0.9); font-weight: normal;
+            position: absolute; left: 30px; font-size: 2.8vh; font-weight: normal;
         }
 
         #ui-title {
-            font-size: 4.5vh; font-weight: 900;
-            max-width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            font-size: 4.2vh; font-weight: 900; max-width: 65%;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
 
         .controls { position: absolute; right: 20px; display: flex; gap: 10px; }
-        .btn { background: rgba(255,255,255,0.2); border: 2px solid #fff; color: #fff; padding: 8px 15px; cursor: pointer; border-radius: 6px; font-size: 1rem; }
+        .btn { background: rgba(255,255,255,0.2); border: 2px solid #fff; color: #fff; padding: 8px 15px; cursor: pointer; border-radius: 4px; }
 
-        /* 內文區：自動伸縮，絕不超出 */
+        /* 內容區：自動伸縮 */
         .main-display { 
-            flex: 1; /* 佔據剩餘所有空間 */
-            display: flex; justify-content: center; align-items: center; 
-            padding: 0 6vw; position: relative;
-            overflow: hidden; /* 確保內容不會溢出蓋到走字 */
+            flex: 1; display: flex; justify-content: center; align-items: center; 
+            padding: 0 7vw; position: relative; overflow: hidden;
         }
 
-        /* 內文字體放大 20% (約 6.5vh) */
         #ui-content { 
-            font-size: 6.5vh; line-height: 1.5; color: #fff; text-align: justify; 
-            width: 100%; transition: opacity 0.3s; font-weight: 500;
-            word-wrap: break-word;
+            font-size: 6.5vh; line-height: 1.6; color: #fff; text-align: justify; 
+            width: 100%; transition: opacity 0.4s; font-weight: 500;
         }
 
-        .page-counter {
-            position: absolute; bottom: 2vh; right: 3vw;
-            font-size: 3vh; color: var(--page-info);
-        }
+        .page-counter { position: absolute; bottom: 3vh; right: 4vw; font-size: 3.5vh; color: var(--page-info); }
 
-        /* 底部走字區：固定高度 */
+        /* 底部走字區 */
         .marquee-wrapper {
-            height: 12vh; min-height: 70px;
-            background: #111; border-top: 5px solid var(--text-gold);
+            height: 12vh; background: #111; border-top: 5px solid var(--text-gold);
             display: flex; align-items: center; overflow: hidden; position: relative;
-            z-index: 10;
         }
-        #marquee-text { 
-            white-space: nowrap; font-size: 6vh; font-weight: bold; 
-            color: var(--text-gold); position: absolute; 
-        }
+        #marquee-text { white-space: nowrap; font-size: 6vh; font-weight: bold; color: var(--text-gold); position: absolute; }
 
         #overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.98); z-index: 1000; display: flex; justify-content: center; align-items: center; }
     </style>
@@ -80,26 +62,26 @@
 <body>
 
     <div id="overlay">
-        <button class="btn" style="font-size: 2.5rem; padding: 30px 70px;" onclick="initSystem()">啟動系統</button>
+        <button class="btn" style="font-size: 2.5rem; padding: 25px 60px;" onclick="initSystem()">啟動廣播系統</button>
     </div>
 
     <header class="header">
         <div id="ui-date" class="publish-date">--/--/----</div>
         <div id="ui-title">同步中...</div>
         <div class="controls">
-            <button class="btn" onclick="resumeApp()">播放</button>
-            <button class="btn" onclick="pauseApp()">暫停</button>
-            <button class="btn" onclick="stopApp()">停止</button>
+            <button class="btn" onclick="resumeApp()">▶</button>
+            <button class="btn" onclick="pauseApp()">⏸</button>
+            <button class="btn" onclick="stopApp()">⏹</button>
         </div>
     </header>
 
     <main class="main-display">
-        <div id="ui-content">正在獲取資料...</div>
+        <div id="ui-content">載入中...</div>
         <div id="ui-page" class="page-counter"></div>
     </main>
 
     <footer class="marquee-wrapper">
-        <div id="marquee-text">正在載入最新交通資訊...</div>
+        <div id="marquee-text">正在載入新聞...</div>
     </footer>
 
     <script>
@@ -109,16 +91,11 @@
         let marqueePos = window.innerWidth;
         const synth = window.speechSynthesis;
 
-        // 智慧分頁：這是在放大字體後防止溢出的關鍵
         function smartSplit(text, maxLength = 65) {
             const result = [];
             let currentStr = "";
-            // 以標點符號切分
             const chunks = text.split(/([。；！？])/).filter(Boolean);
-
-            for (let i = 0; i < chunks.length; i++) {
-                let s = chunks[i];
-                // 如果加上這一句會超過長度限制，就另起一頁
+            for (let s of chunks) {
                 if ((currentStr + s).length > maxLength && currentStr !== "") {
                     result.push(currentStr);
                     currentStr = "";
@@ -129,50 +106,35 @@
             return result;
         }
 
-        async function updateNewsData() {
+        async function updateData() {
             try {
                 const res = await fetch('data.json?t=' + Date.now());
                 const data = await res.json();
-                
                 document.getElementById('ui-title').innerText = data.title;
                 document.getElementById('ui-date').innerText = data.date;
                 document.getElementById('marquee-text').innerText = "【最新交通消息】" + data.title;
-                
-                // 執行分頁
                 pages = smartSplit(data.fullText);
-                
                 if (!isStopped) startBroadcast();
-            } catch (e) {
-                console.error("等待數據中...");
-            }
+            } catch (e) { console.error("Waiting for JSON..."); }
         }
 
         function initSystem() {
             document.getElementById('overlay').style.display = 'none';
             isStopped = false;
-            updateNewsData();
+            updateData();
             startMarquee();
-            setInterval(updateNewsData, 600000);
+            setInterval(updateData, 600000);
         }
 
         async function startBroadcast() {
             currentIter++;
             const iterId = currentIter;
-            const contentEl = document.getElementById('ui-content');
-            const pageEl = document.getElementById('ui-page');
-
             for (let i = 0; i < pages.length; i++) {
                 if (isStopped || iterId !== currentIter) break;
-                
-                contentEl.style.opacity = "0";
-                await new Promise(r => setTimeout(r, 300));
-                
-                pageEl.innerText = `${i + 1} / ${pages.length}`;
-                contentEl.innerText = pages[i];
-                contentEl.style.opacity = "1";
-                
+                document.getElementById('ui-page').innerText = `${i + 1} / ${pages.length}`;
+                document.getElementById('ui-content').innerText = pages[i];
                 await speak(pages[i]);
-                if (!isStopped) await new Promise(r => setTimeout(r, 1000));
+                await new Promise(r => setTimeout(r, 1200));
             }
             if (!isStopped && iterId === currentIter) startBroadcast();
         }
@@ -183,34 +145,19 @@
                 utter.lang = 'zh-HK';
                 utter.rate = 0.9;
                 utter.onend = resolve;
-                utter.onerror = resolve;
                 synth.speak(utter);
             });
         }
 
-        function stopApp() {
-            isStopped = true;
-            synth.cancel();
-            document.getElementById('ui-content').innerText = "系統已停機";
-            document.getElementById('ui-page').innerText = "";
-        }
-
-        function resumeApp() {
-            if (isStopped) {
-                isStopped = false;
-                startBroadcast();
-            } else {
-                synth.resume();
-            }
-        }
-
+        function stopApp() { isStopped = true; synth.cancel(); document.getElementById('ui-content').innerText = "系統已停機"; }
+        function resumeApp() { if (isStopped) { isStopped = false; startBroadcast(); } else { synth.resume(); } }
         function pauseApp() { synth.pause(); }
 
         function startMarquee() {
             const marquee = document.getElementById('marquee-text');
             function animate() {
                 if (!isStopped && !synth.paused) {
-                    marqueePos -= 2.2; 
+                    marqueePos -= 2;
                     if (marqueePos < -marquee.offsetWidth) marqueePos = window.innerWidth;
                     marquee.style.transform = `translateX(${marqueePos}px)`;
                 }

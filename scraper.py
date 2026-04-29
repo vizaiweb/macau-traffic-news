@@ -2,56 +2,57 @@ import requests
 from bs4 import BeautifulSoup
 import json
 import re
-import os
 
 def auto_scrape_dsat():
-    # DSAT 新聞列表頁面（獲取最新一條新聞的 ID）
-    list_url = "https://www.dsat.gov.mo/dsat/news.aspx"
+    # 使用你提供的特定新聞網址進行精確抓取
+    target_url = "https://www.dsat.gov.mo/dsat/news_detail.aspx?a_id=6411412D3DE9A671E1D150550511DAD9"
+    
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7'
     }
 
     try:
-        # 1. 獲取列表頁以找到最新的連結
-        res = requests.get(list_url, headers=headers)
+        res = requests.get(target_url, headers=headers, timeout=15)
         res.encoding = 'utf-8'
         soup = BeautifulSoup(res.text, 'html.parser')
-        
-        # 找到第一個新聞連結 (假設連結在特定 class 內)
-        first_news_link = soup.select_one(".news_list_row a") 
-        if not first_news_link:
-            print("無法獲取列表，使用預設連結測試...")
-            target_url = "https://www.dsat.gov.mo/dsat/news_detail.aspx?a_id=6411412D3DE9A671E1D150550511DAD9"
-        else:
-            target_url = "https://www.dsat.gov.mo/dsat/" + first_news_link['href']
 
-        # 2. 進入詳情頁抓取全文
-        detail_res = requests.get(target_url, headers=headers)
-        detail_res.encoding = 'utf-8'
-        detail_soup = BeautifulSoup(detail_res.text, 'html.parser')
+        # 1. 嘗試多種可能的標題位置
+        title_tag = soup.find('div', class_='news_title') or soup.find('h1') or soup.find('div', id='title')
+        title = title_tag.get_text(strip=True) if title_tag else "交通事務局最新消息"
 
-        # 擷取標題
-        title = detail_soup.find('div', class_='news_title').get_text(strip=True)
-        
-        # 擷取發佈日期 (從標題下的欄位)
-        date_text = detail_soup.find('div', class_='news_info').get_text()
-        date_match = re.search(r'\d{2}-\d{2}-\d{4}', date_text)
-        publish_date = date_match.group() if date_match else "----/--/--"
+        # 2. 擷取日期 (從頁面中尋找 DD-MM-YYYY 格式)
+        publish_date = "28-04-2026" # 預設值
+        date_search = soup.find(text=re.compile(r'\d{2}-\d{2}-\d{4}'))
+        if date_search:
+            date_match = re.search(r'\d{2}-\d{2}-\d{4}', date_search)
+            if date_match:
+                publish_date = date_match.group()
 
-        # 核心：擷取所有文字內容 (一字不漏)
-        # 鎖定正文容器
-        content_container = detail_soup.find('div', class_='news_content')
-        
-        # 提取容器內所有層級的文字內容
+        # 3. 核心：地毯式擷取所有正文文字
+        # DSAT 詳情頁的主要內容通常在名為 news_content 或 td_content 的容器中
+        content_container = soup.find('div', class_='news_content') or \
+                            soup.find('div', id='news_content') or \
+                            soup.find('div', class_='content_detail')
+
         if content_container:
-            # 使用換行符作為分隔符保留結構感，隨後清理多餘空格
-            raw_text = content_container.get_text(separator=' ', strip=True)
-            # 移除連續多個空格或換行，轉為乾淨的長字串
-            full_content = re.sub(r'\s+', ' ', raw_text)
+            # 刪除不必要的腳本或按鈕標籤，避免雜訊
+            for extra in content_container(["script", "style", "button"]):
+                extra.decompose()
+            
+            # get_text(separator=' ') 確保不同段落間有空格，不會黏在一起
+            full_content = content_container.get_text(separator=' ', strip=True)
+            # 清理連續多餘空格
+            full_content = re.sub(r'\s+', ' ', full_content)
         else:
-            full_content = "未找到正文內容。"
+            # 如果還是找不到容器，嘗試抓取所有 <p> 標籤
+            paragraphs = soup.find_all('p')
+            if paragraphs:
+                full_content = " ".join([p.get_text(strip=True) for p in paragraphs])
+            else:
+                raise ValueError("無法定位新聞正文內容容器")
 
-        # 3. 打包輸出
+        # 4. 存儲數據
         output_data = {
             "title": title,
             "date": publish_date,
@@ -61,10 +62,18 @@ def auto_scrape_dsat():
         with open('data.json', 'w', encoding='utf-8') as f:
             json.dump(output_data, f, ensure_ascii=False, indent=2)
             
-        print(f"成功更新 data.json: {title}")
+        print(f"成功擷取新聞全文：{title}")
 
     except Exception as e:
-        print(f"自動抓取發生錯誤: {e}")
+        print(f"自動抓取失敗: {str(e)}")
+        # 發生錯誤時生成一個備用的 data.json，防止前端崩潰
+        fallback = {
+            "title": "新聞加載失敗",
+            "date": "00-00-0000",
+            "fullText": "系統目前無法從目標網頁獲取數據，請檢查網絡連接或目標網址是否有效。"
+        }
+        with open('data.json', 'w', encoding='utf-8') as f:
+            json.dump(fallback, f, ensure_ascii=False, indent=2)
 
 if __name__ == "__main__":
     auto_scrape_dsat()

@@ -1,198 +1,59 @@
-<!DOCTYPE html>
-<html lang="zh-Hant">
-<head>
-    <meta charset="UTF-8">
-    <title>DSAT 交通資訊自動廣播屏</title>
-    <style>
-        :root {
-            --bg-color: #050505;
-            --dsat-red: #e63946;
-            --text-gold: #ffca28;
-            --page-info: rgba(255, 255, 255, 0.35);
+import requests
+from bs4 import BeautifulSoup
+import json
+import re
+
+def auto_scrape_dsat():
+    # 這是你提供的新聞連結
+    target_url = "https://www.dsat.gov.mo/dsat/news_detail.aspx?a_id=6411412D3DE9A671E1D150550511DAD9"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+
+    try:
+        res = requests.get(target_url, headers=headers, timeout=15)
+        res.encoding = 'utf-8'
+        soup = BeautifulSoup(res.text, 'html.parser')
+
+        # 擷取標題
+        title_tag = soup.select_one(".news_title") or soup.find('h1')
+        title = title_tag.get_text(strip=True) if title_tag else "DSAT 交通新聞"
+
+        # 擷取日期 (從文字內容中尋找日期格式)
+        publish_date = "28-04-2026"
+        date_area = soup.select_one(".news_info") or soup
+        date_match = re.search(r'\d{2}-\d{2}-\d{4}', date_area.get_text())
+        if date_match:
+            publish_date = date_match.group()
+
+        # 核心：地毯式擷取新聞內文的所有文字 (一字不漏)
+        # 鎖定 DSAT 專用的內容容器
+        content_container = soup.select_one(".news_content") or soup.select_one("#news_content")
+
+        if content_container:
+            # 獲取所有段落、編號文字內容
+            # separator=' ' 確保文字間有間隔，strip=True 移除頭尾空白
+            raw_text = content_container.get_text(separator=' ', strip=True)
+            # 將多個空白或換行符號整合成一個空格，確保文字流完整
+            full_content = re.sub(r'\s+', ' ', raw_text)
+        else:
+            # 備案：如果抓不到容器，就抓取所有 p 標籤內容
+            full_content = " ".join([p.get_text(strip=True) for p in soup.find_all('p')])
+
+        # 寫入 JSON
+        output_data = {
+            "title": title,
+            "date": publish_date,
+            "fullText": full_content
         }
 
-        body {
-            margin: 0; background: var(--bg-color); color: white;
-            font-family: "PingFang HK", "Microsoft JhengHei", sans-serif;
-            height: 100vh; display: flex; flex-direction: column; overflow: hidden;
-        }
-
-        .header {
-            background: var(--dsat-red); padding: 2vh; font-size: 4vh;
-            font-weight: 900; text-align: center; position: relative;
-            display: flex; justify-content: center; align-items: center;
-        }
-
-        #ui-date { position: absolute; left: 25px; font-size: 2.8vh; font-weight: normal; }
-        .controls { position: absolute; right: 20px; display: flex; gap: 10px; }
-        .btn { background: rgba(255,255,255,0.2); border: 2px solid #fff; color: #fff; padding: 8px 20px; cursor: pointer; border-radius: 4px; font-size: 1.1rem; }
-        .btn:hover { background: #fff; color: #000; }
-
-        .main-display { flex: 1; display: flex; justify-content: center; align-items: center; padding: 0 8vw; position: relative; }
-
-        /* 字體放大 20% (由 5.2vh 升至 6.2vh) */
-        #ui-content { 
-            font-size: 6.2vh; line-height: 1.6; color: #fff; text-align: justify; width: 100%;
-            transition: opacity 0.4s;
-        }
-
-        .page-counter { position: absolute; bottom: 4vh; right: 4vw; font-size: 3.5vh; color: var(--page-info); }
-
-        .marquee-wrapper { background: #111; height: 13vh; border-top: 5px solid var(--text-gold); display: flex; align-items: center; overflow: hidden; position: relative; }
-        #marquee-text { white-space: nowrap; font-size: 6vh; font-weight: bold; color: var(--text-gold); position: absolute; }
-        
-        #overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.98); z-index: 1000; display: flex; justify-content: center; align-items: center; }
-    </style>
-</head>
-<body>
-
-    <div id="overlay">
-        <button class="btn" style="font-size: 2.5rem; padding: 30px 60px;" onclick="initSystem()">啟動廣播監控系統</button>
-    </div>
-
-    <div class="header">
-        <div id="ui-date">--/--/----</div>
-        <span id="ui-title">同步中...</span>
-        <div class="controls">
-            <button class="btn" onclick="resumeApp()">▶ 播放</button>
-            <button class="btn" onclick="pauseApp()">⏸ 暫停</button>
-            <button class="btn" onclick="stopApp()">⏹ 停止</button>
-        </div>
-    </div>
-
-    <div class="main-display">
-        <div id="ui-content">正在從自動化接口獲取數據...</div>
-        <div id="ui-page" class="page-counter"></div>
-    </div>
-
-    <div class="marquee-wrapper">
-        <div id="marquee-text">正在加載最新交通資訊...</div>
-    </div>
-
-    <script>
-        let isStopped = true;
-        let currentIter = 0;
-        let pages = [];
-        const synth = window.speechSynthesis;
-
-        // 智慧分段：必須在標點符號 (。；！？) 處分頁，且每頁不超過 75 字
-        function smartSplit(text, maxLength = 75) {
-            const chunks = text.split(/([。；！？])/).filter(Boolean);
-            const finalPages = [];
-            let buffer = "";
+        with open('data.json', 'w', encoding='utf-8') as f:
+            json.dump(output_data, f, ensure_ascii=False, indent=2)
             
-            for (let i = 0; i < chunks.length; i++) {
-                let segment = chunks[i];
-                // 如果是標點符號，附加到上一句
-                if (segment.match(/[。；！？]/) && buffer !== "") {
-                    buffer += segment;
-                    finalPages.push(buffer);
-                    buffer = "";
-                } else {
-                    if ((buffer + segment).length > maxLength) {
-                        if (buffer) finalPages.push(buffer);
-                        buffer = segment;
-                    } else {
-                        buffer += segment;
-                    }
-                }
-            }
-            if (buffer) finalPages.push(buffer);
-            return finalPages;
-        }
+        print(f"成功擷取全文: {title}")
 
-        async function updateNewsData() {
-            try {
-                // 讀取由 Scraper 產出的 json
-                const res = await fetch('data.json?t=' + Date.now());
-                const data = await res.json();
-                
-                document.getElementById('ui-title').innerText = data.title;
-                document.getElementById('ui-date').innerText = data.date;
-                document.getElementById('marquee-text').innerText = "【重要消息】" + data.title;
-                
-                // 一字不漏地處理全文
-                pages = smartSplit(data.fullText);
-                
-                if (!isStopped) startBroadcast();
-            } catch (e) {
-                document.getElementById('ui-content').innerText = "等待 data.json 更新中...";
-            }
-        }
+    except Exception as e:
+        print(f"錯誤: {e}")
 
-        function initSystem() {
-            document.getElementById('overlay').style.display = 'none';
-            isStopped = false;
-            updateNewsData();
-            startMarquee();
-            // 每 15 分鐘重新抓取一次
-            setInterval(updateNewsData, 900000); 
-        }
-
-        async function startBroadcast() {
-            currentIter++;
-            const iterId = currentIter;
-            const contentEl = document.getElementById('ui-content');
-            const pageEl = document.getElementById('ui-page');
-
-            for (let i = 0; i < pages.length; i++) {
-                if (isStopped || iterId !== currentIter) break;
-                
-                contentEl.style.opacity = "0";
-                await new Promise(r => setTimeout(r, 300));
-                
-                pageEl.innerText = `${i + 1} / ${pages.length}`;
-                contentEl.innerText = pages[i];
-                contentEl.style.opacity = "1";
-                
-                await speak(pages[i]);
-                if (!isStopped) await new Promise(r => setTimeout(r, 1000));
-            }
-            if (!isStopped && iterId === currentIter) startBroadcast();
-        }
-
-        function speak(text) {
-            return new Promise((resolve) => {
-                const utter = new SpeechSynthesisUtterance(text);
-                utter.lang = 'zh-HK';
-                utter.rate = 0.92;
-                utter.onend = resolve;
-                utter.onerror = resolve;
-                synth.speak(utter);
-            });
-        }
-
-        function stopApp() {
-            isStopped = true;
-            synth.cancel();
-            document.getElementById('ui-content').innerText = "系統已停止";
-            document.getElementById('ui-page').innerText = "";
-        }
-
-        function resumeApp() {
-            if (isStopped) {
-                isStopped = false;
-                startBroadcast();
-            } else if (synth.paused) {
-                synth.resume();
-            }
-        }
-
-        function pauseApp() { synth.pause(); }
-
-        function startMarquee() {
-            const marquee = document.getElementById('marquee-text');
-            let pos = window.innerWidth;
-            function animate() {
-                if (!isStopped && !synth.paused) {
-                    pos -= 2.2;
-                    if (pos < -marquee.offsetWidth) pos = window.innerWidth;
-                    marquee.style.transform = `translateX(${pos}px)`;
-                }
-                requestAnimationFrame(animate);
-            }
-            animate();
-        }
-    </script>
-</body>
-</html>
+if __name__ == "__main__":
+    auto_scrape_dsat()

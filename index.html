@@ -2,12 +2,13 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>DSAT 交通消息實時廣播 - 分頁強化版</title>
+    <title>DSAT 交通消息廣播 - 控制增強版</title>
     <style>
         :root {
             --bg-color: #050505;
             --dsat-red: #e63946;
             --text-gold: #ffca28;
+            --btn-bg: rgba(255, 255, 255, 0.15);
         }
 
         body {
@@ -16,56 +17,63 @@
             height: 100vh; display: flex; flex-direction: column; overflow: hidden;
         }
 
+        /* 頂部標題 */
         .header {
             background: var(--dsat-red); padding: 2vh; font-size: 4vh;
-            font-weight: 900; text-align: center;
+            font-weight: 900; text-align: center; position: relative;
         }
 
-        /* 中間全文顯示區：分頁邏輯 */
-        .main-display {
-            flex: 1; display: flex; justify-content: center; align-items: center;
-            padding: 0 8vw; position: relative;
+        /* 右上角控制面板 */
+        .controls {
+            position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
+            display: flex; gap: 15px;
         }
 
-        #ui-content {
-            font-size: 4.5vh; line-height: 1.8; color: #fff;
-            text-align: justify; transition: opacity 0.5s;
+        .btn {
+            background: var(--btn-bg); border: 2px solid white; color: white;
+            padding: 10px 20px; font-size: 1.2rem; cursor: pointer; border-radius: 8px;
+            transition: all 0.2s; display: flex; align-items: center; gap: 8px;
         }
 
-        /* 下方走字區域：顯示重點 */
+        .btn:hover { background: white; color: black; }
+        .btn:active { transform: scale(0.95); }
+        .btn.active { border-color: var(--text-gold); color: var(--text-gold); }
+
+        /* 內容顯示 */
+        .main-display { flex: 1; display: flex; justify-content: center; align-items: center; padding: 0 8vw; }
+        #ui-content { font-size: 4.5vh; line-height: 1.8; color: #fff; text-align: justify; }
+
+        /* 底部走字 */
         .marquee-wrapper {
-            background: #1a1a1a; height: 12vh; border-top: 4px solid var(--text-gold);
+            background: #111; height: 12vh; border-top: 4px solid var(--text-gold);
             display: flex; align-items: center; overflow: hidden; position: relative;
         }
+        #marquee-text { white-space: nowrap; font-size: 5.5vh; font-weight: bold; color: var(--text-gold); position: absolute; }
 
-        #marquee-text {
-            white-space: nowrap; font-size: 5.5vh; font-weight: bold;
-            color: var(--text-gold); position: absolute;
-        }
-
+        /* 啟動遮罩 */
         #overlay {
             position: fixed; inset: 0; background: rgba(0,0,0,0.95);
-            z-index: 1000; display: flex; flex-direction: column;
-            justify-content: center; align-items: center;
-        }
-
-        .page-indicator {
-            position: absolute; bottom: 20px; right: 20px;
-            font-size: 2.5vh; color: #666;
+            z-index: 1000; display: flex; justify-content: center; align-items: center;
         }
     </style>
 </head>
 <body>
 
     <div id="overlay">
-        <button onclick="startApp()" style="padding:20px 50px; font-size:30px; cursor:pointer;">啟動五一交通消息播放</button>
+        <button class="btn" style="font-size: 2rem; padding: 30px 60px;" onclick="initSystem()">啟動播放系統</button>
     </div>
 
-    <div class="header" id="ui-title">載入中...</div>
+    <div class="header">
+        <span id="ui-title">載入中...</span>
+        <div class="controls">
+            <button id="btn-play" class="btn" onclick="resumeApp()">▶ 播放</button>
+            <button id="btn-pause" class="btn" onclick="pauseApp()">⏸ 暫停</button>
+            <button id="btn-stop" class="btn" onclick="stopApp()">⏹ 停止</button>
+        </div>
+    </div>
 
     <div class="main-display">
         <div id="ui-content"></div>
-        <div id="page-num" class="page-indicator"></div>
     </div>
 
     <div class="marquee-wrapper">
@@ -74,82 +82,97 @@
 
     <script>
         const newsData = {
-            id: "20260429-01",
             title: "跨部門協調五一交通安排",
-            fullText: "為保障五一勞動節假期期間市民和旅客出行暢順，並平衡遊客與居民的出行需求，交通事務局按照恆常跨部門協作機制，聯同治安警察局、海關、市政署、巴士公司、跨境客運、綜合度假休閒企業及酒店等舉行協調會議。透過協調公共巴士及輕軌服務、完善口岸交通配套、強化實時訊息發佈、制訂應急預案等，以有效疏導假期人流。主要措施包括：各口岸預留穿梭巴士停靠區；兩巴營運時節性路線 3BX、17T、21AT、26AT 及 101XS；輕軌於指定日子延長服務至凌晨；及在舊城區設置臨時行人專用區等。",
-            highlights: "【重點內容】五一期間增開 3BX, 17T, 21AT, 26AT, 101XS 巴士路線；輕軌延長服務；舊城區實施臨時行人專用區；口岸穿梭巴士改為點對點直達。"
+            fullText: "為保障五一勞動節假期期間市民和旅客出行暢順，並平衡遊客與居民的出行需求，交通事務局按照恆常跨部門協作機制，聯同治安警察局、海關、市政署、巴士公司、跨境客運、綜合度假休閒企業及酒店等舉行協調會議。透過協調公共巴士及輕軌服務、完善口岸交通配套、強化實時訊息發佈、制訂應急預案等，以有效疏導假期人流。",
+            highlights: "【重點】五一增開 3BX, 17T, 21AT, 26AT, 101XS 路線；輕軌延長服務；舊城區實施臨時行人區。"
         };
 
-        function startApp() {
+        let isMarqueeRunning = true;
+        let marqueePos = window.innerWidth;
+        const synth = window.speechSynthesis;
+
+        function initSystem() {
             document.getElementById('overlay').style.display = 'none';
+            document.getElementById('ui-title').innerText = newsData.title;
+            document.getElementById('marquee-text').innerText = newsData.highlights;
+            startMarquee();
             playSequence();
         }
 
-        // 將長文本分段（約每 80-100 字一頁）
-        function splitText(text, length = 90) {
-            const pages = [];
-            for (let i = 0; i < text.length; i += length) {
-                pages.push(text.substring(i, i + length));
+        // --- 核心控制函數 ---
+
+        function pauseApp() {
+            if (synth.speaking && !synth.paused) {
+                synth.pause();
+                isMarqueeRunning = false;
+                updateBtnState('pause');
             }
-            return pages;
         }
+
+        function resumeApp() {
+            if (synth.paused) {
+                synth.resume();
+                isMarqueeRunning = true;
+                updateBtnState('play');
+            } else if (!synth.speaking) {
+                playSequence(); // 如果停止了，重新開始
+            }
+        }
+
+        function stopApp() {
+            synth.cancel();
+            isMarqueeRunning = false;
+            marqueePos = window.innerWidth; // 重置走字位置
+            document.getElementById('ui-content').innerText = "播放已停止";
+            updateBtnState('stop');
+        }
+
+        function updateBtnState(state) {
+            document.getElementById('btn-play').classList.toggle('active', state === 'play');
+            document.getElementById('btn-pause').classList.toggle('active', state === 'pause');
+            document.getElementById('btn-stop').classList.toggle('active', state === 'stop');
+        }
+
+        // --- 播放邏輯 ---
 
         async function playSequence() {
-            const titleEl = document.getElementById('ui-title');
+            isMarqueeRunning = true;
+            updateBtnState('play');
             const contentEl = document.getElementById('ui-content');
-            const marqueeEl = document.getElementById('marquee-text');
-            const pageEl = document.getElementById('page-num');
-
-            titleEl.innerText = newsData.title;
-            marqueeEl.innerText = newsData.highlights;
             
-            const pages = splitText(newsData.fullText);
-            
-            // 啟動下方走字動畫
-            startMarquee();
+            // 簡單分頁
+            const pages = [
+                newsData.fullText.substring(0, 90),
+                newsData.fullText.substring(90)
+            ];
 
-            // 循環播放每一頁
             for (let i = 0; i < pages.length; i++) {
-                contentEl.style.opacity = 0;
-                await new Promise(r => setTimeout(r, 500));
-                
                 contentEl.innerText = pages[i];
-                pageEl.innerText = `第 ${i+1} / ${pages.length} 頁`;
-                contentEl.style.opacity = 1;
-
-                // 播放該頁語音並等待結束
-                await speakText(pages[i]);
-                await new Promise(r => setTimeout(r, 1000)); // 頁面間隔
+                await speakPromise(pages[i]);
+                if (!isMarqueeRunning) break; // 如果點了停止，中斷循環
             }
-
-            // 全部播完後延遲重播
-            setTimeout(playSequence, 5000);
         }
 
-        function speakText(text) {
+        function speakPromise(text) {
             return new Promise((resolve) => {
                 const utter = new SpeechSynthesisUtterance(text);
                 utter.lang = 'zh-HK';
                 utter.rate = 0.9;
                 utter.onend = resolve;
-                window.speechSynthesis.speak(utter);
+                synth.speak(utter);
             });
         }
 
         function startMarquee() {
             const marquee = document.getElementById('marquee-text');
-            const speed = 100; // 像素每秒
-            const textWidth = marquee.offsetWidth;
             const containerWidth = window.innerWidth;
             
-            let pos = containerWidth;
-            
             function animate() {
-                pos -= 1.5; // 移動速度
-                if (pos < -marquee.offsetWidth) {
-                    pos = containerWidth;
+                if (isMarqueeRunning) {
+                    marqueePos -= 2;
+                    if (marqueePos < -marquee.offsetWidth) marqueePos = containerWidth;
+                    marquee.style.transform = `translateX(${marqueePos}px)`;
                 }
-                marquee.style.transform = `translateX(${pos}px)`;
                 requestAnimationFrame(animate);
             }
             animate();

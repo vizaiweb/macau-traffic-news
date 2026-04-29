@@ -2,13 +2,13 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>DSAT 交通廣播 - 增強視覺版</title>
+    <title>DSAT 交通廣播 - 完整功能版</title>
     <style>
         :root {
             --bg-color: #050505;
             --dsat-red: #e63946;
             --text-gold: #ffca28;
-            --page-info: rgba(255, 255, 255, 0.3); /* 淺色分頁文字 */
+            --page-info: rgba(255, 255, 255, 0.4);
         }
 
         body {
@@ -17,42 +17,46 @@
             height: 100vh; display: flex; flex-direction: column; overflow: hidden;
         }
 
-        /* 標題與控制 */
+        /* 標題欄：新增日期位置 */
         .header {
             background: var(--dsat-red); padding: 2vh; font-size: 4vh;
             font-weight: 900; text-align: center; position: relative;
+            display: flex; justify-content: center; align-items: center;
+        }
+
+        .publish-date {
+            position: absolute; left: 20px; font-size: 2.5vh;
+            color: rgba(255, 255, 255, 0.8); font-weight: normal;
         }
 
         .controls {
-            position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
-            display: flex; gap: 10px;
+            position: absolute; right: 20px; display: flex; gap: 10px;
         }
 
         .btn {
-            background: rgba(255,255,255,0.1); border: 1px solid #fff; color: #fff;
-            padding: 8px 15px; cursor: pointer; border-radius: 4px;
+            background: rgba(255,255,255,0.15); border: 1px solid #fff; color: #fff;
+            padding: 8px 18px; cursor: pointer; border-radius: 4px; font-size: 1.2rem;
         }
 
-        /* 內容區：字體放大 4px 約等於增加 0.5vh 左右的比例 */
+        .btn:hover { background: #fff; color: #000; }
+
+        /* 內容區 */
         .main-display { 
             flex: 1; display: flex; justify-content: center; align-items: center; 
             padding: 0 8vw; position: relative; 
         }
 
         #ui-content { 
-            font-size: 5vh; /* 這裡已增加尺寸 */
-            line-height: 1.7; color: #fff; text-align: justify; 
-            transition: opacity 0.4s;
+            font-size: 5vh; line-height: 1.7; color: #fff; text-align: justify; 
+            width: 100%;
         }
 
-        /* 右下角分頁數字 */
         .page-counter {
             position: absolute; bottom: 3vh; right: 4vw;
             font-size: 3vh; color: var(--page-info);
-            font-family: Arial, sans-serif;
         }
 
-        /* 走字 */
+        /* 底部走字 */
         .marquee-wrapper {
             background: #111; height: 12vh; border-top: 4px solid var(--text-gold);
             display: flex; align-items: center; overflow: hidden; position: relative;
@@ -68,21 +72,23 @@
 <body>
 
     <div id="overlay">
-        <button class="btn" style="font-size: 2rem; padding: 20px 40px;" onclick="initSystem()">開始廣播</button>
+        <button class="btn" style="font-size: 2rem; padding: 20px 40px;" onclick="initSystem()">啟動廣播系統</button>
     </div>
 
     <div class="header">
+        <div id="ui-date" class="publish-date">2026/04/29</div>
         <span id="ui-title">載入中...</span>
         <div class="controls">
-            <button class="btn" onclick="resumeApp()">播放</button>
-            <button class="btn" onclick="pauseApp()">暫停</button>
-            <button class="btn" onclick="stopApp()">停止</button>
+            <button class="btn" onclick="resumeApp()">▶ 播放</button>
+            <button class="btn" onclick="pauseApp()">⏸ 暫停</button>
+            <button class="btn" onclick="stopApp()">⏹ 停止</button>
         </div>
     </div>
 
     <div class="main-display">
-        <div id="ui-content"></div>
-        <div id="ui-page" class="page-counter"></div> </div>
+        <div id="ui-content">點擊播放開始讀取內容...</div>
+        <div id="ui-page" class="page-counter"></div>
+    </div>
 
     <div class="marquee-wrapper">
         <div id="marquee-text"></div>
@@ -90,47 +96,59 @@
 
     <script>
         const news = {
+            date: "2026/04/29",
             title: "五一交通安排協調部署",
-            fullText: "為保障五一勞動節假期期間市民和旅客出行暢順，並平衡遊客與居民的出行需求，交通事務局按照恆常跨部門協作機制，聯同治安警察局、海關、市政署、巴士公司、跨境客運、綜合度假休閒企業及酒店等舉行協調會議。透過協調公共巴士及輕軌服務、完善口岸交通配套、強化實時訊息發佈、制訂應急預案等，以有效疏導假期人流。",
-            highlights: "【重點】增開 3BX, 17T, 21AT, 26AT, 101XS 路線；輕軌延長服務至凌晨；舊城區實施臨時行人專用區。"
+            // 內文已確保包含你提供的所有文字
+            fullText: "為保障五一勞動節假期期間市民和旅客出行暢順，並平衡遊客與居民的出行需求，交通事務局按照恆常跨部門協作機制，聯同治安警察局、海關、市政署、巴士公司、跨境客運、綜合度假休閒企業及酒店（下簡稱“休企＂）、關閘東側站場管理公司等舉行協調會議，透過協調公共巴士及輕軌服務、完善口岸交通配套、強化實時訊息發佈、制訂應急預案等，以有效疏導假期人流。",
+            highlights: "【重點】增開 3BX, 17T, 21AT, 26AT, 101XS 路線；輕軌延長服務；舊城區實施臨時行人專用區。"
         };
 
         let isRunning = false;
+        let isStopped = true;
         let marqueePos = window.innerWidth;
         const synth = window.speechSynthesis;
-
-        function splitText(text, size = 85) {
+        
+        // 分頁逻辑：確保一字不漏
+        function splitText(text, size = 80) {
             const arr = [];
-            for (let i = 0; i < text.length; i += size) arr.push(text.substring(i, i + size));
+            for (let i = 0; i < text.length; i += size) {
+                arr.push(text.substring(i, i + size));
+            }
             return arr;
         }
-
         const pages = splitText(news.fullText);
 
         function initSystem() {
             document.getElementById('overlay').style.display = 'none';
             document.getElementById('ui-title').innerText = news.title;
+            document.getElementById('ui-date').innerText = news.date;
             document.getElementById('marquee-text').innerText = news.highlights;
             startMarquee();
-            playSequence();
+            resumeApp(); // 啟動時直接播放
         }
 
         async function playSequence() {
-            isRunning = true;
+            if (isStopped) return;
+            
             const contentEl = document.getElementById('ui-content');
             const pageEl = document.getElementById('ui-page');
 
             for (let i = 0; i < pages.length; i++) {
-                if (!isRunning) break;
+                if (isStopped) break;
                 
-                // 更新分頁顯示
+                // 更新 UI
                 pageEl.innerText = `${i + 1} / ${pages.length}`;
                 contentEl.innerText = pages[i];
                 
+                // 等待語音播放完畢
                 await speak(pages[i]);
-                await new Promise(r => setTimeout(r, 800));
+                
+                // 短暫停頓進入下一頁
+                if (!isStopped) await new Promise(r => setTimeout(r, 600));
             }
-            if (isRunning) playSequence(); // 循環播放
+            
+            // 循環播放邏輯
+            if (!isStopped) playSequence();
         }
 
         function speak(text) {
@@ -139,18 +157,42 @@
                 utter.lang = 'zh-HK';
                 utter.rate = 0.9;
                 utter.onend = resolve;
+                utter.onerror = resolve; // 防止報錯導致卡死
                 synth.speak(utter);
             });
         }
 
-        function pauseApp() { synth.pause(); isRunning = false; }
-        function resumeApp() { synth.resume(); isRunning = true; }
-        function stopApp() { synth.cancel(); isRunning = false; document.getElementById('ui-content').innerText = "已停止"; }
+        // --- 控制邏輯修復 ---
+
+        function resumeApp() {
+            if (synth.paused) {
+                synth.resume();
+                isRunning = true;
+            } else if (isStopped) {
+                isStopped = false;
+                isRunning = true;
+                playSequence(); // 從頭開始
+            }
+        }
+
+        function pauseApp() {
+            synth.pause();
+            isRunning = false;
+        }
+
+        function stopApp() {
+            isStopped = true;
+            isRunning = false;
+            synth.cancel(); // 徹底清空語音隊列
+            document.getElementById('ui-content').innerText = "播放已停止";
+            document.getElementById('ui-page').innerText = "";
+            marqueePos = window.innerWidth; // 走字歸位
+        }
 
         function startMarquee() {
             const marquee = document.getElementById('marquee-text');
             function animate() {
-                if (isRunning) {
+                if (isRunning && !isStopped) {
                     marqueePos -= 2;
                     if (marqueePos < -marquee.offsetWidth) marqueePos = window.innerWidth;
                     marquee.style.transform = `translateX(${marqueePos}px)`;

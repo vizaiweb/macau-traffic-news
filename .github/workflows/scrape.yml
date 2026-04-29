@@ -1,24 +1,30 @@
 name: 每天自動擷取新聞
 on:
   schedule:
-    - cron: '0 * * * *' # 每小時自動執行一次
-  workflow_dispatch: # 也可以手動觸發
+    - cron: '0 * * * *' 
+  workflow_dispatch: 
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # 這裡必須明確要求寫入權限
     steps:
       - name: 檢查代碼
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3 # 建議升級到 v3 或 v4
+        
       - name: 設定 Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.9'
+          
       - name: 安裝套件
         run: pip install requests beautifulsoup4
+        
       - name: 執行抓取
         run: python scraper.py
-      - name: 提交並推送更新後的 data.json
+        
+      - name: 提交並推送
         run: |
           git config --global user.name "AutoScraper"
           git config --global user.email "actions@github.com"
